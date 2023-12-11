@@ -29,6 +29,7 @@ Format de requètes via Kibana :
 - POST *index*/_update/*id* *{champs_à_modifier}* : modifie le document *id* en donnant comme paramètre uniquement les champs à modifier
 - DELETE *index*/_doc/*id* : supprimer le document *id*
 
+
 Résultat d'une requète :
 ```{
   "_index" : "favorite_movie", #nom de l'index
@@ -67,6 +68,212 @@ Manières de calculer le score :
 
 Ranking : classement des documents retournés par une recherche par leurs score
 
-Script d'insertion des documents du dataset des news headlines du kaggle : https://www.kaggle.com/datasets/rmisra/news-category-dataset
+Script d'insertion des documents du dataset des news categories du kaggle : https://www.kaggle.com/datasets/rmisra/news-category-dataset
 
 https://github.com/kmalki/elastic-crash-course/blob/1c77b40aee81b3b32fe70ea8aaa8fe2f1f82f07c/main.py#L1-L19
+
+Requète de recherche :
+```
+GET news-headers/_search
+```
+Retourne un sample de documents présents dans l'index
+```
+{
+  "took" : 121,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 5,
+    "successful" : 5,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 10000, #nb de documents retourné, 10000 max par défaut
+      "relation" : "gte" #relation: description du nombre total de documents qui vérifie la recherche par rapport à value : gte (greater) ou eq (equal)
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "news-headlines",
+        "_type" : "_doc",
+        "_id" : "NoT9WIwBFc6yYpJYHHpm",
+        "_score" : 1.0,
+        "_source" : {
+          "category" : "THE WORLDPOST",
+          "headline" : "Think that 2016 Was A Tough Year For Saudi Arabia? Wait Till You See 2017",
+          "authors" : "James M. Dorsey, ContributorS. Rajaratnam School of International Studies, Senior fellow",
+          "link" : "https://www.huffingtonpost.com/entry/think-that-2016-was-a-tough-year-for-saudi-arabia-wait_us_5869e60ee4b014e7c72ee2a4",
+          "short_description" : "By James M. Dorsey 2016 was not a good year for Saudi Arabia. Sharply lower oil prices sparked a domestic financial crisis",
+          "date" : "2017-01-02"
+        }
+      }
+      ...
+    ]
+  }
+}
+```
+Récupérer le total de documents
+```
+GET news-headlines/_search
+{
+  "track_total_hits": true
+}
+
+
+RES
+{
+    ...
+    "total" : {
+      "value" : 209527,
+      "relation" : "eq"
+    },
+}
+```
+2 types de recherches :
+- query : retrouver les documents qui match certains critères
+- aggs : aggregation, analyse sur les documents
+Requète pour une période de temps précise :
+```
+GET news-headlines/_search
+{
+  "query": { #type de recherche
+    "range": { #recherche dans un interval
+      "date": { #par la date
+        "gte": "2015-06-20", #greater than or eq
+        "lte": "2015-09-22" #lower than or eq
+      }
+    }
+  }
+}
+```
+Nombre de documents par catégorie :
+```
+GET news-headlines/_search
+{
+  "aggs": {
+    "by_category": { #nom de l'aggrega dans le résultat
+      "terms": { #type d'aggrega (terms : création d'un bucket par unique valeur)
+        "field": "category", #champ sur lequel se fait l'aggrega
+        "size": 100 #nom de bucket à retourner max
+      }
+    }
+  }
+}
+
+RES
+"aggregations" : {
+    "by_category" : {
+      "doc_count_error_upper_bound" : 0,
+      "sum_other_doc_count" : 0,
+      "buckets" : [
+        {
+          "key" : "politics",
+          "doc_count" : 35602
+        },
+        {
+          "key" : "wellness",
+          "doc_count" : 17945
+        },
+        {
+          "key" : "entertainment",
+          "doc_count" : 17362
+        },
+        ...
+      ]
+    }
+}
+```
+Combinaison query & aggs
+
+```
+GET news-headlines/_search
+{
+  "query": {
+    "match": {
+      "category": "ENTERTAINMENT"
+    }
+  },
+  "aggs": {
+    "popular_in_entertainmment": { #nom de l'aggréga
+      "significant_text": { #type : agg qui retourne les termes ayant une haute fréquence ou inhabituelle
+        "field": "headline" #champ de l'agg
+      }
+    }
+  }
+}
+
+RES
+"aggregations" : {
+    "popular_in_entertainmment" : {
+      "doc_count" : 17362,
+      "bg_count" : 209527,
+      "buckets" : [
+        {
+          "key" : "trailer", #terme
+          "doc_count" : 410, #nb de doc qui ont le terme dans le set de résultat
+          "score" : 0.20821949710931825,
+          "bg_count" : 504 #nb de doc qui ont le terme dans l'index
+        },
+        {
+          "key" : "movie",
+          "doc_count" : 437,
+          "score" : 0.1506452864034305,
+          "bg_count" : 755
+        }
+        ...
+      ]
+    }
+}
+```
+Precison & recall
+```
+GET news-headlines/_search
+{
+  "query": {
+    "match": {
+      "headline": "Khloe Kardashian Kendall Jenner"
+    }
+  }
+}
+
+RES:
+955 docs
+```
+=> *match* utilise un OR pour chaque terme et récupère chaque document contenant au moins un des termes, augmentant le nombre de hits, ce qui augmente le recall.
+On peut changer ce comportement en ajouter le champ *operator*, ce qui baissera le nombre de résultats, et augmentera la précision.
+```
+GET news-headlines/_search
+{
+  "query": {
+    "match": {
+      "headline": 
+      {
+        "query": "Khloe Kardashian Kendall Jenner",
+        "operator": "and"
+        }
+  }
+}
+}
+
+RES:
+1 doc
+```
+Pour tuner la précision et le recall, on peut utiliser le champ *minimum_should_math* qui indique le nombre minimum de terme qui doivent matcher
+```
+GET news-headlines/_search
+{
+  "query": {
+    "match": {
+      "headline": 
+      {
+        "query": "Khloe Kardashian Kendall Jenner",
+      "minimum_should_match": 3
+    }
+  }
+}
+}
+
+RES:
+6 docs
+```
