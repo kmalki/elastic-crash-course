@@ -45,3 +45,26 @@ Résultat d'une requète :
   "_primary_term" : 1
 }
 ```
+
+## Part 2: Relevance of a search
+
+Etat d'un document dans une recherche :
+- Vrai positif : document **pertinent retourné** par la recherche, qu'on **attendait** dans le résultat
+- Faux positif : document **non pertinent retourné** par la recherche, qu'on **n'attendait pas** dans le résultat
+- Vrai négatif : document **non pertinent non retourné** par la recherche, qu'on **n'attendait pas** dans le résultat
+- Faux négatif : document **pertinent non retourné** par la recherche, qu'on **attendait** dans le résultat
+
+Comment mesurer la pertinence d'une recherche :
+- precision : **Vrais positifs / (Vrais positifs + Faux positifs)** : ratio des **résultats réellement pertinents retournés** par **l'ensemble des résultats retournés**
+- recall : Vrais positifs / (Vrais positifs + Faux négatifs) : ratio des **résultats retournés** par **l'ensemble des documents (totaux) pertinents**
+
+Deux mesures inversément liées : augmenter la precision fera baisser le recall, et inversement
+
+Score : valeur qui représente la pertinence d'un document retourné par une recherche
+Manières de calculer le score :
+- Term Frequency : détermine combien de fois chaque terme de la recherche est présent dans le document
+- Inverse Document Frequency : diminue le poids des termes à haute fréquence et augmente le poids des termes à basse fréquence
+
+Ranking : classement des documents retournés par une recherche par leurs score
+
+Script d'insertion des documents du dataset des news headlines du kaggle : https://www.kaggle.com/datasets/rmisra/news-category-dataset
