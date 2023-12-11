@@ -68,3 +68,5 @@ Manières de calculer le score :
 Ranking : classement des documents retournés par une recherche par leurs score
 
 Script d'insertion des documents du dataset des news headlines du kaggle : https://www.kaggle.com/datasets/rmisra/news-category-dataset
+
+https://github.com/kmalki/elastic-crash-course/blob/1c77b40aee81b3b32fe70ea8aaa8fe2f1f82f07c/main.py#L1-L19
