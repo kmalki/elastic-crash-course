@@ -3,7 +3,7 @@
 Repo faisant lien aux workshops nommés Beginner's Crash Course to Elastic Stack mis en place par Elastic Community : https://www.youtube.com/watch?v=gS_nHTWZEJ8&list=PL_mJOmq4zsHZYAyK606y7wjQtC0aoE6Es&index=5
 
 
-## Course 1 : Intro to Elasticsearch and Kibana
+## Part 1: Intro to Elasticsearch and Kibana
 
 J'ai préféré déployer un cluster Elasticsearch sur AWS grâce au free tier. Le déploiement est fait avec Terraform.
 
@@ -133,6 +133,7 @@ RES
 2 types de recherches :
 - query : retrouver les documents qui match certains critères
 - aggs : aggregation, analyse sur les documents
+  
 Requète pour une période de temps précise :
 ```
 GET news-headlines/_search
@@ -154,7 +155,7 @@ GET news-headlines/_search
   "aggs": {
     "by_category": { #nom de l'aggrega dans le résultat
       "terms": { #type d'aggrega (terms : création d'un bucket par unique valeur)
-        "field": "category", #champ sur lequel se fait l'aggrega
+        "field": "category.keyword", #champ sur lequel se fait l'aggrega
         "size": 100 #nom de bucket à retourner max
       }
     }
@@ -168,15 +169,15 @@ RES
       "sum_other_doc_count" : 0,
       "buckets" : [
         {
-          "key" : "politics",
+          "key" : "POLITICS",
           "doc_count" : 35602
         },
         {
-          "key" : "wellness",
+          "key" : "WELLNESS",
           "doc_count" : 17945
         },
         {
-          "key" : "entertainment",
+          "key" : "ENTERTAINMENT",
           "doc_count" : 17362
         },
         ...
@@ -276,4 +277,263 @@ GET news-headlines/_search
 
 RES:
 6 docs
+```
+
+Part 3: Full text queries
+
+Requète pour chercher une phrase complète :
+```
+GET news-headlines/_search
+{
+  "query": { #query
+    "match_phrase": { #type de la query : recherche de phrase
+      "Specify the field you want to search": { #champ sur lequel on recherche
+        "query": "Enter search terms" #phrase à rechercher
+      }
+    }
+  }
+}
+```
+Comparaison *match* & *match_phrase* : "New York Knicks"
+```
+GET news-headlines/_search
+{
+  "query": {
+    "match": {
+      "headline": "New York Knicks"
+    }
+  }
+}
+
+RES : 8881 docs
+
+
+GET news-headlines/_search
+{
+  "query": {
+    "match_phrase": {
+      "headline": "New York Knicks"
+    }
+  }
+}
+
+RES : 3 docs
+```
+Requète sur de multiples champs :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "multi_match": { #match sur de multiples champs
+      "query": "", #recherche
+      "fields": [] #champs dans lesquels rechercher
+    }
+  }
+}
+```
+Multi-match équivaut à un match sur différents champs.
+```
+GET news-headlines/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "NBA",
+      "fields": ["headline", "short_description"]
+    }
+  }
+}
+```
+Per-field boosting : permet de donner **plus de poids à certains champs** : exemple ici, un article qui aura la recherche dans l'en-tête plutot que dans la description, l'article devrait être plus intéressant dans notre recherche que l'inverse. On ajoute le poids après le champ suivi d'un ^ : **"headline^2"**
+```
+GET news-headlines/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "NBA",
+      "fields": ["headline^2", "short_description"]
+    }
+  }
+}
+```
+Cela nous donne le même nombre de résultat mais le *ranking* sera différent en fonction des *boostings*.
+
+Il existe différents type de multi-match.
+Search phrase & multi-match :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "New York Knicks",
+      "fields": ["headline^2", "short_description"]
+    }
+  }
+}
+
+RES : + 10000 docs
+
+
+GET news-headlines/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "New York Knicks",
+      "fields": ["headline^2", "short_description"],
+      "type": "phrase"
+    }
+  }
+}
+
+RES : 9 docs
+```
+
+Requète combinée :
+On peut utiliser une *bool query*, qui permet de combiner des requètes et d'ajouter des conditions entre elles.
+Il y a 4 clauses possibles :
+- must :
+- must_not :
+- should :
+- filter :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {One or more queries can be specified here. A document MUST match all of these queries to be considered as a hit.}
+      ],
+      "must_not": [
+        {A document must NOT match any of the queries specified here. If it does, it is excluded from the search results.}
+      ],
+      "should": [
+        {A document does not have to match any queries specified here. However, it if it does match, this document is given a higher score.}
+      ],
+      "filter": [
+        {These filters(queries) place documents in either yes or no category. Ones that fall into the yes category are included in the hits. }
+      ]
+    }
+  }
+}
+```
+Combinaison *query* & *aggs* :
+Catégories d'article mentionnant Michelle Obama :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "match_phrase": {
+      "headline": "Michelle Obama"
+    }
+  },
+  "aggs": {
+    "category_mentions": {
+      "terms": {
+        "field": "category.keyword",
+        "size": 100
+      }
+    }
+  }
+}
+```
+Articles politiques mentionnant Michelle Obama dans le titre avec la clause *must* :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+         {"match_phrase": {
+            "headline": "Michelle Obama"
+            }
+         },
+         {"match": {
+            "category": "POLITICS"
+            }
+         }
+      ]
+    }
+  }
+}
+
+RES : 53 docs
+```
+Articles mentionnant Michelle Obama dans le titre en excluant la catégorie WEDDING avec la clause *must_not* :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+         {"match_phrase": {
+            "headline": "Michelle Obama"
+            }
+         }
+      ],
+      "must_not": [
+        {
+          "match": {
+            "category": "WEDDINGS"
+          }
+        }
+      ]
+    }
+  }
+}
+
+RES : 216 docs
+```
+Tous les articles mentionnant Michelle Obama dans le titre en favorisant le score de ceux de la catégorie *BLACK VOICES* avec la clause *should* :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+         {"match_phrase": {
+            "headline": "Michelle Obama"
+            }
+         }
+      ],
+      "should": [
+        {
+          "match_phrase": {
+            "category.keyword": "BLACK VOICES"
+          }
+        }
+      ]
+    }
+  }
+}
+
+RES : 220 docs
+```
+Articles mentionnant Michelle Obama dans le titre entre 25/03/2014 et 25/03/2016 avec la clause *filter*:
+```
+GET news-headlines/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+         {"match_phrase": {
+            "headline": "Michelle Obama"
+            }
+         }
+      ],
+      "filter": [
+        {
+          
+           "range": {
+             "date": {
+               "gte" : "2014-03-25",
+               "lte": "2016-03-25"
+             }
+           }
+         
+        }
+      ]
+    }
+  }
+}
+
+RES : 33 docs
 ```
