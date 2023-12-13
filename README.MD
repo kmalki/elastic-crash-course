@@ -3,6 +3,21 @@
 Repo faisant lien aux workshops nommés Beginner's Crash Course to Elastic Stack mis en place par Elastic Community : https://www.youtube.com/watch?v=gS_nHTWZEJ8&list=PL_mJOmq4zsHZYAyK606y7wjQtC0aoE6Es&index=5
 
 
+
+- [Beginner's Crash Course to Elastic Stack](#beginners-crash-course-to-elastic-stack)
+  - [Part 1: Intro to Elasticsearch and Kibana](#part-1-intro-to-elasticsearch-and-kibana)
+  - [Part 2: Relevance of a search](#part-2-relevance-of-a-search)
+  - [Part 3: Full text queries](#part-3-full-text-queries)
+  - [Part 4: Running Aggregations with Elasticsearch and Kibana](#part-4-running-aggregations-with-elasticsearch-and-kibana)
+    - [Metric aggs](#metric-aggs)
+    - [Bucket aggs](#bucket-aggs)
+      - [Date histogram aggs](#date-histogram-aggs)
+      - [Histogram aggs](#histogram-aggs)
+      - [Range aggs](#range-aggs)
+      - [Terms aggs](#terms-aggs)
+      - [Aggs combinés](#aggs-combinés)
+
+
 ## Part 1: Intro to Elasticsearch and Kibana
 
 J'ai préféré déployer un cluster Elasticsearch sur AWS grâce au free tier. Le déploiement est fait avec Terraform.
@@ -279,7 +294,7 @@ RES:
 6 docs
 ```
 
-Part 3: Full text queries
+## Part 3: Full text queries
 
 Requète pour chercher une phrase complète :
 ```
@@ -1039,7 +1054,7 @@ RES :
     }
 }
 ```
-### Range aggs
+#### Range aggs
 Semblable à histogram aggs, mais on peut avoir différents intervals numériques dans la même requète
 Syntax
 ```
@@ -1118,7 +1133,7 @@ RES :
 }
 ```
 
-### Terms aggs
+#### Terms aggs
 Crée un bucket pour chaque terme unique d'un champ adns tous les documents. Souvent utilisé pour récupéré les termes les plus fréquents.
 Syntax
 ```
@@ -1222,7 +1237,7 @@ RES :
   }
 ```
 
-### Aggs combinés
+#### Aggs combinés
 Revenu journalier 
 On ajoute un sous aggrégat dans l'aggrégat daily_transactions.
 1. groupement par jour des transactions
