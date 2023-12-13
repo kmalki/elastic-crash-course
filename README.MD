@@ -34,6 +34,20 @@ Repo de prises de notes faisant lien à la série de workshops nommés Beginner'
       - [Création du mapping](#création-du-mapping)
     - [Modifier un champ d'un mapping](#modifier-un-champ-dun-mapping)
     - [Runtime fields](#runtime-fields)
+  - [Part 6: Troubleshooting Beginner Level Elasticsearch Errors](#part-6-troubleshooting-beginner-level-elasticsearch-errors)
+    - [Erreurs fréquentes](#erreurs-fréquentes)
+    - [Process de débug](#process-de-débug)
+    - [Erreurs lors de CRUD](#erreurs-lors-de-crud)
+      - [Erreur 404 : no such index x](#erreur-404--no-such-index-x)
+      - [Erreur 405 : incorrect HTTP method for uri, allow x](#erreur-405--incorrect-http-method-for-uri-allow-x)
+      - [Erreur 400 : Unexpected Character: was expecting a comma to separate Object entries at Source: ... line: x](#erreur-400--unexpected-character-was-expecting-a-comma-to-separate-object-entries-at-source--line-x)
+      - [Erreur 400 : x query does not support y](#erreur-400--x-query-does-not-support-y)
+      - [Erreur 400 : Unexpected character...: was expecting double-quote to start field name](#erreur-400--unexpected-character-was-expecting-double-quote-to-start-field-name)
+      - [Erreur 400 : parsing\_exception](#erreur-400--parsing_exception)
+    - [Erreurs lors d'aggs \& mapping](#erreurs-lors-daggs--mapping)
+      - [Erreur 400 : Aggregation definition for x, expected a y.](#erreur-400--aggregation-definition-for-x-expected-a-y)
+      - [Erreur 400 : Field x of type y is not supported for z type of aggregation](#erreur-400--field-x-of-type-y-is-not-supported-for-z-type-of-aggregation)
+      - [Erreur 400 : Found two aggregation type definitions in x : y and z](#erreur-400--found-two-aggregation-type-definitions-in-x--y-and-z)
 
 
 ## Part 1: Intro to Elasticsearch and Kibana
@@ -1801,5 +1815,377 @@ GET produce_v2/_search
       }
     }
   }
+}
+```
+
+## Part 6: Troubleshooting Beginner Level Elasticsearch Errors
+### Erreurs fréquentes
+- Unable to connect : problème de cluster ou de réseau. Check le réseau et la santé du cluster.
+- Connection unexpectedly closed : Noeud mort ou problèmz de réseau.
+- 5XX : internal server error. Check les logs
+- 4XX : erreur côté client. Problème de requète
+  
+### Process de débug
+- Checker le statut de l'erreur
+- Checker l'entiereté de la réponse
+- Utiliser la documentation Elastic, comparer la requète à la doc
+
+### Erreurs lors de CRUD
+#### Erreur 404 : no such index x
+```
+GET common_errors/_doc/1
+```
+2 raisons possibles :
+- index inéxistant
+- typo dans l'index
+```
+PUT common_errors
+```
+
+#### Erreur 405 : incorrect HTTP method for uri, allow x
+```
+PUT common_errors/_doc
+{
+  "source_of_error": "Using the wrong syntax for PUT or POST indexing request"
+}
+
+RES : 
+{
+  "error" : "Incorrect HTTP method for uri [/common_errors/_doc?pretty=true] and method [PUT], allowed: [POST]",
+  "status" : 405
+}
+
+```
+Elastic précise qu'on utilise pas la bonne méthode pour cette URI.
+Solutions :
+- utiliser POST
+- modifier l'uri pour pouvoir utiliser PUT : ajouter un id à la fin de l'uri
+
+#### Erreur 400 : Unexpected Character: was expecting a comma to separate Object entries at Source: ... line: x
+On veut ajouter deux champs *error* et *solution* au doc d'id 1
+```
+POST common_errors/_update/1
+{
+  "doc": {
+    "error": "405 Method Not Allowed"
+    "solution": "Look up the syntax of PUT and POST indexing requests and use the correct syntax."
+  }
+}
+
+RES :
+{
+  "error" : {
+    "root_cause" : [
+      {
+        "type" : "x_content_parse_exception",
+        "reason" : "[3:14] [UpdateRequest] failed to parse field [doc]"
+      }
+    ],
+    "type" : "x_content_parse_exception",
+    "reason" : "[3:14] [UpdateRequest] failed to parse field [doc]",
+    "caused_by" : {
+      "type" : "json_parse_exception",
+      "reason" : "Unexpected character ('\"' (code 34)): was expecting comma to separate Object entries\n at [Source: (org.elasticsearch.common.io.stream.InputStreamStreamInput); line: 4, column: 6]"
+    }
+  },
+  "status" : 400
+}
+```
+Elastic précise une erreur *json_parse_exception*. Egalement il précise la *reason* : expecting comma to spearate Object entries, c'est à dire il manque une virgule pour séparer les champs de l'Object. Il précise également la ligne de l'erreur.
+
+#### Erreur 400 : x query does not support y
+On veut utiliser une range query pour récuperer les news entre deux dates :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "range": {
+      "date": 
+        "gte": "2015-06-20",
+        "lte": "2015-09-22"
+    }
+  }
+}
+
+RES :
+{
+  "error" : {
+    "root_cause" : [
+      {
+        "type" : "parsing_exception",
+        "reason" : "[range] query does not support [date]",
+        "line" : 5,
+        "col" : 9
+      }
+    ],
+    "type" : "parsing_exception",
+    "reason" : "[range] query does not support [date]",
+    "line" : 5,
+    "col" : 9
+  },
+  "status" : 400
+}
+```
+Elastic nous retourne une erreur de *type* parsing_exception et nous explique dans *reason* que range ne supporte pas le type date. La *reason* est pas clair par rapport à la requète mais plutôt le *type* de l'erreur qui nous aide.
+Solution :
+- checker la documentation pour avoir la syntaxe de la requète
+- il manque les brackets après date.
+
+#### Erreur 400 : Unexpected character...: was expecting double-quote to start field name
+On veut chercher la phrase "party planning" dans le champ *headline* et *short_description* :
+```
+GET news-headlines/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "party planning",
+      "fields": [
+        "headline",
+        "short_description"
+      ]
+    },
+    "type": "phrase"
+  }
+}
+
+RES :
+{
+  "error" : {
+    "root_cause" : [
+      {
+        "type" : "parsing_exception",
+        "reason" : "[multi_match] malformed query, expected [END_OBJECT] but found [FIELD_NAME]",
+        "line" : 10,
+        "col" : 5
+      }
+    ],
+    "type" : "parsing_exception",
+    "reason" : "[multi_match] malformed query, expected [END_OBJECT] but found [FIELD_NAME]",
+    "line" : 10,
+    "col" : 5
+  },
+  "status" : 400
+}
+```
+Elastic nous précise encore une erreur de *type* parsing_exception, et dans *reason* que la query est malformé : il s'attendait à la fin de l'objet et a trouvé un champ.
+Solution : 
+- le *type* phrase est en dehors du *multi_match*, le déplacer à l'intérieur
+
+#### Erreur 400 : parsing_exception
+On veut récupérer les articles d'ENTERTAINMENT publié le 2018-04-12
+```
+GET news-headlines/_search
+{
+  "query": {
+    "match": {
+      "category": "ENTERTAINMENT",
+      "date":"2018-04-12"
+    }
+  }
+}
+
+RES :
+{
+  "error" : {
+    "root_cause" : [
+      {
+        "type" : "parsing_exception",
+        "reason" : "[match] query doesn't support multiple fields, found [category] and [date]",
+        "line" : 5,
+        "col" : 14
+      }
+    ],
+    "type" : "parsing_exception",
+    "reason" : "[match] query doesn't support multiple fields, found [category] and [date]",
+    "line" : 5,
+    "col" : 14
+  },
+  "status" : 400
+}
+```
+Elastic indique une erreur de parsing, et que *match* ne support pas plusieurs champs.
+Solution :
+- utiliser une requète *bool*
+
+### Erreurs lors d'aggs & mapping
+On veut récupérer le résumé des catégories des news.
+```
+GET news-headlines/_search
+{
+  "aggs": {
+    "by_category": {
+      "terms": {
+        "field": "category"
+      }
+    }
+  }
+}
+```
+Par défaut Elastic nous renvoie quand même top 10 des hits. Si on n'en a pas besoin, on ajoute le champs 
+```
+"size": 0
+```
+
+#### Erreur 400 : Aggregation definition for x, expected a y.
+
+```
+GET news-headlines/_search
+{
+  "aggs": {
+    "size": 0,
+    "by_category": {
+      "terms": {
+        "field": "category"
+      }
+    }
+  }
+}
+
+RES :
+{
+  "error" : {
+    "root_cause" : [
+      {
+        "type" : "parsing_exception",
+        "reason" : "Aggregation definition for [size starts with a [VALUE_NUMBER], expected a [START_OBJECT].",
+        "line" : 3,
+        "col" : 13
+      }
+    ],
+    "type" : "parsing_exception",
+    "reason" : "Aggregation definition for [size starts with a [VALUE_NUMBER], expected a [START_OBJECT].",
+    "line" : 3,
+    "col" : 13
+  },
+  "status" : 400
+}
+```
+Elastic nous dit qu'il y a un problème de parsing, qu'il s'attendait à un début d'object. 
+Solution :
+- le champ *size* n'est pas au bon endroit, il faut le placer dans la requète générale
+
+#### Erreur 400 : Field x of type y is not supported for z type of aggregation
+Dans le workshop 4, il faut modifier le mapping des données en créant un index avec le bon mapping et en réindexant les données. Si ce n'est pas fait, lors des requètes d'aggs on aurait eu des erreurs. 
+Les erreurs sont  tirées du repo github du workshop car je n'ai pas le mauvais mapping.
+On veut grouper nos données par interval de 8h sur *InvoiceDate*, on utilise donc *date_histogram*.
+```
+GET ecommerce_original_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_by_8_hrs": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "fixed_interval": "8h"
+      }
+    }
+  }
+}
+```
+L'erreur dit que *InvoiceDate* de type keyword n'est pas supporté par cet aggs. C'est donc bien un problème de mapping. *Date_histogram* ne supporte que le type date.
+Solution :
+- modifier le mapping du champ *InvoiceDate* en date
+- pour cela, on ne peut pas changer dans le même index
+- il faut créer un nouvel index avec le bon mapping
+- puis réindexer les données
+
+#### Erreur 400 : Found two aggregation type definitions in x : y and z
+Dans le workshop 4 on a voulu calculer le daily revenue et le nombre de clients uniques par jour.
+```
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_per_day": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "calendar_interval": "day"
+      },
+      "daily_revenue": {
+        "sum": {
+          "script": {
+            "source": "doc['UnitPrice'].value * doc['Quantity'].value"
+          }
+        }
+      },
+      "number_of_unique_customers_per_day": {
+        "cardinality": {
+          "field": "CustomerID"
+        }
+      }
+    }
+  }
+}
+
+RES :
+{
+  "error" : {
+    "root_cause" : [
+      {
+        "type" : "parsing_exception",
+        "reason" : "Found two aggregation type definitions in [transactions_per_day]: [date_histogram] and [daily_revenue]",
+        "line" : 9,
+        "col" : 24
+      }
+    ],
+    "type" : "parsing_exception",
+    "reason" : "Found two aggregation type definitions in [transactions_per_day]: [date_histogram] and [daily_revenue]",
+    "line" : 9,
+    "col" : 24
+  },
+  "status" : 400
+}
+```
+Elastic nous précise avoir trouvé 2 définitions d'aggs. En effet elles sont imbriqués dans *transactions_per_day*.
+Le fonctionnement que l'on cherche est d'aggs les transactions, puis d'appliquer d'autres aggs à l'intérieur.
+Solution :
+- il faut englober les 2 aggs dans un champ *aggs* à l'intérieur du aggs principal *transactions_per_day*
+```
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_per_day": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "calendar_interval": "day"
+      },
+      "aggs": {
+        "daily_revenue": {
+          "sum": {
+            "script": {
+              "source": "doc['UnitPrice'].value * doc['Quantity'].value"
+            }
+          }
+        },
+        "number_of_unique_customers_per_day": {
+          "cardinality": {
+            "field": "CustomerID"
+          }
+        }
+      }
+    }
+  }
+}
+
+RES :
+...
+"aggregations" : {
+    "transactions_per_day" : {
+      "buckets" : [
+        {
+          "key_as_string" : "12/1/2010 0:0",
+          "key" : 1291161600000,
+          "doc_count" : 3096,
+          "number_of_unique_customers_per_day" : {
+            "value" : 98
+          },
+          "daily_revenue" : {
+            "value" : 57458.3
+          }
+        },
+        ...
+      ]
+    }
 }
 ```
