@@ -3,3 +3,4 @@ terraform.*
 *.pem
 venv
 *.json
+*.csv

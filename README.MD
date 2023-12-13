@@ -537,3 +537,865 @@ GET news-headlines/_search
 
 RES : 33 docs
 ```
+
+## Part 4: Running Aggregations with Elasticsearch and Kibana
+
+Nouveau dataset de factures ecommerces : https://www.kaggle.com/datasets/carrie1/ecommerce-data/data
+
+Script ingestion des données du nouveau dataset :
+(A du être modifié plusieurs fois car lors de la lecture et l'envoi des données du csv il y a eu plusieurs erreurs : timeout, problème de vm et de process car j'avais essayé de le faire via une vm EC2, et finalement j'ai fini par terminé l'envoi des données depuis mon local, en changeant à chaque fois le début du tableau de données à récupérer du csv. J'ai également par la suite utilisé *parallel_bulk* pour paralleliser et augmenter la vitesse d'insertion. J'ai aussi modifié le chunk_size.)
+
+LINK
+
+Sample d'informations sur l'index
+```
+GET ecommerce_data/_search
+
+
+RES : 
+"hits" : [
+      {
+        "_index" : "ecommerce_data",
+        "_type" : "_doc",
+        "_id" : "RIZVX4wBFc6yYpJYlI8_",
+        "_score" : 1.0,
+        "_source" : {
+          "InvoiceNo" : "545690",
+          "StockCode" : "85062",
+          "Description" : "PEARL CRYSTAL PUMPKIN T-LIGHT HLDR",
+          "Quantity" : "1",
+          "InvoiceDate" : "3/6/2011 12:46",
+          "UnitPrice" : "1.65",
+          "CustomerID" : "13263",
+          "Country" : "United Kingdom"
+        }
+      },
+      {
+        "_index" : "ecommerce_data",
+        "_type" : "_doc",
+        "_id" : "RYZVX4wBFc6yYpJYlI9U",
+        "_score" : 1.0,
+        "_source" : {
+          "InvoiceNo" : "545690",
+          "StockCode" : "22460",
+          "Description" : "EMBOSSED GLASS TEALIGHT HOLDER",
+          "Quantity" : "1",
+          "InvoiceDate" : "3/6/2011 12:46",
+          "UnitPrice" : "1.25",
+          "CustomerID" : "13263",
+          "Country" : "United Kingdom"
+        }
+      },
+      ...
+]
+```
+Aggs syntax :
+```
+GET ecommerce_data/_search
+{
+  "aggs": {
+    "Name your aggregations here": {
+      "Specify the aggregation type here": {
+        "field": "Name the field you want to aggregate on here"
+      }
+    }
+  }
+}
+```
+
+### Metric aggs
+Type d'aggs qui permet de calculer des métriques numériques sur les données. Exemple :
+- sum
+- min
+- max
+- avg
+- cardinality : unique count
+
+Somme sur UnitPrice avec *sum*
+```
+GET ecommerce_data/_search
+{
+  "aggs": {
+    "sum_unit_price": {
+      "sum": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+RES :
+{
+  ...
+  "aggregations" : {
+    "sum_unit_price" : {
+      "value" : 1946449.894
+    }
+  }
+}
+```
+Ajouter size à 0 dans la query permet de ne pas retourner les top hits et accelérer la query
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "sum_unit_price": {
+      "sum": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+RES :
+{
+  "took" : 70,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 5,
+    "successful" : 5,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "sum_unit_price" : {
+      "value" : 1946449.894
+    }
+  }
+}
+
+```
+Prix le plus bas sur UnitPrice avec *min*
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "lowest_unit_price": {
+      "min": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+RES :
+
+"aggregations" : {
+    "lowest_unit_price" : {
+      "value" : 0.001
+    }
+  }
+```
+Prix le plus haut sur UnitPrice avec *max*
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "highest_unit_price": {
+      "max": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+RES : 
+"aggregations" : {
+    "highest_unit_price" : {
+      "value" : 498.79
+    }
+  }
+```
+Prix moyen sur UnitPrice avec *avg*
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "average_unit_price": {
+      "avg": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "average_unit_price" : {
+      "value" : 3.6103066456206867
+    }
+  }
+```
+Statistiques sur UnitPrice en une requète avec *stats*
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "stats_unit_price": {
+      "stats": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "stats_unit_price" : {
+      "count" : 539137,
+      "min" : 0.001,
+      "max" : 498.79,
+      "avg" : 3.6103066456206867,
+      "sum" : 1946449.894
+    }
+  }
+```
+Nombre de clients uniques avec *cardinality* sur CustomerID
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "unique_clients": {
+      "cardinality": {
+        "field": "CustomerID"
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "unique_clients" : {
+      "value" : 4359
+    }
+  }
+```
+Prix moyen des produits vendu en Allemagne
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "query": {
+    "match": {
+      "Country": "Germany"
+    }
+  }, 
+  "aggs": {
+    "avg_product_price": {
+      "avg": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "avg_product_price" : {
+      "value" : 3.6725674536256325
+    }
+  }
+```
+### Bucket aggs
+Aggrégation sur différents subset de données : ex : avg sur chaque mois
+Les données d'un même bucket partagent un même critère
+Différents types de bucket aggs:
+- date histogram aggs
+- histogram aggs
+- range aggs
+- terms aggs
+
+#### Date histogram aggs
+Utile pour grouper par interval de temps
+2 manière de grouper :
+- fixed_interval : interval toujours constant
+- calendar_interval : interval peut varier, ex mois (nb de jours varie)
+
+Date histogram aggs fixed interval syntax
+```
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "Name your aggregations here": {
+      "date_histogram": {
+        "field":"Name the field you want to aggregate on here",
+        "fixed_interval": "Specify the interval here"
+      }
+    }
+  }
+}
+```
+Aggs des transactions par interval de 8h
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "transactions_by_8hrs": {
+      "date_histogram": {
+        "field": "InvoiceDate"
+      ,
+        "fixed_interval": "8h"
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "transactions_by_8hrs" : {
+      "buckets" : [
+        {
+          "key_as_string" : "12/1/2010 8:0",
+          "key" : 1291190400000,
+          "doc_count" : 2291
+        },
+        {
+          "key_as_string" : "12/1/2010 16:0",
+          "key" : 1291219200000,
+          "doc_count" : 805
+        },
+        ...
+      ]
+    }
+}
+```
+Aggs des transactions par calendar interval 
+Valeurs possibles :
+- minute,1m
+- hour,1h
+- day,1d
+- week,1w
+- month,1M
+- quarter,1q
+- year,1y
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "transactions_by_months": {
+      "date_histogram": {
+        "field": "InvoiceDate"
+      ,
+        "calendar_interval": "month"
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "transactions_by_months" : {
+      "buckets" : [
+        {
+          "key_as_string" : "12/1/2010 0:0",
+          "key" : 1291161600000,
+          "doc_count" : 42170
+        },
+        {
+          "key_as_string" : "1/1/2011 0:0",
+          "key" : 1293840000000,
+          "doc_count" : 34999
+        },
+        {
+          "key_as_string" : "2/1/2011 0:0",
+          "key" : 1296518400000,
+          "doc_count" : 27573
+        },
+        {
+          "key_as_string" : "3/1/2011 0:0",
+          "key" : 1298937600000,
+          "doc_count" : 36491
+        }
+      ]
+    }
+}
+```
+Order inversé des dates
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "transactions_by_months": {
+      "date_histogram": {
+        "field": "InvoiceDate"
+      ,
+        "calendar_interval": "month",
+        "order": {
+          "_key": "desc"
+        }
+      }
+    }
+  }
+}
+```
+
+#### Histogram aggs
+Crée des buckets par n'importe quelle interval de valeur numérique
+Syntax
+```
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "Name your aggregations here": {
+      "histogram": {
+        "field":"Name the field you want to aggregate on here",
+        "interval": Specify the interval here
+      }
+    }
+  }
+}
+```
+Aggs par interval de prix base 10
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "transactions_per_price_interval": {
+      "histogram": {
+        "field": "UnitPrice",
+        "interval": 10
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "transactions_per_price_interval" : {
+      "buckets" : [
+        {
+          "key" : 0.0,
+          "doc_count" : 514354
+        },
+        {
+          "key" : 10.0,
+          "doc_count" : 20863
+        },
+        {
+          "key" : 20.0,
+          "doc_count" : 2135
+        }
+        ...
+      ]
+    }
+}
+```
+Order inversé
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "transactions_per_price_interval": {
+      "histogram": {
+        "field": "UnitPrice",
+"interval": 10,
+"order": {
+  "_key": "desc"
+}
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "transactions_per_price_interval" : {
+      "buckets" : [
+        {
+          "key" : 490.0,
+          "doc_count" : 7
+        },
+        {
+          "key" : 480.0,
+          "doc_count" : 2
+        },
+        {
+          "key" : 470.0,
+          "doc_count" : 4
+        },
+        ...
+      ]
+    }
+}
+```
+### Range aggs
+Semblable à histogram aggs, mais on peut avoir différents intervals numériques dans la même requète
+Syntax
+```
+GET Enter_name_of_the_index_here/_search
+{
+  "size": 0,
+  "aggs": {
+   "Name your aggregations here": {
+      "range": {
+        "field": "Name the field you want to aggregate on here",
+        "ranges": [
+          {
+            "to": x
+          },
+          {
+            "from": x,
+            "to": y
+          },
+          {
+            "from": z
+          }
+        ]
+      }
+    }
+  }
+}
+```
+Exemple: interval 0-50, 50-200, 200+
+```
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+   "transactions_per_custom_ranges": {
+      "range": {
+        "field": "UnitPrice",
+        "ranges": [
+          {
+            "to": 50
+          },
+          {
+            "from": 50,
+            "to": 200
+          },
+          {
+            "from": 200
+          }
+        ]
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "transactions_per_custom_ranges" : {
+      "buckets" : [
+        {
+          "key" : "*-50.0",
+          "to" : 50.0,
+          "doc_count" : 537975
+        },
+        {
+          "key" : "50.0-200.0",
+          "from" : 50.0,
+          "to" : 200.0,
+          "doc_count" : 855
+        },
+        {
+          "key" : "200.0-*",
+          "from" : 200.0,
+          "doc_count" : 307
+        }
+      ]
+    }
+}
+```
+
+### Terms aggs
+Crée un bucket pour chaque terme unique d'un champ adns tous les documents. Souvent utilisé pour récupéré les termes les plus fréquents.
+Syntax
+```
+GET Enter_name_of_the_index_here/_search
+{
+  "aggs": {
+    "Name your aggregations here": {
+      "terms": {
+        "field": "Name the field you want to aggregate on here",
+        "size": State how many top results you want returned here
+      }
+    }
+  }
+}
+```
+Top 5 customers par nombre d'achats
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "5_top_customers": {
+      "terms": {
+        "field": "CustomerID",
+        "size": 5
+      }
+    }
+  }
+}
+
+RES :
+"buckets" : [
+        {
+          "key" : 17841,
+          "doc_count" : 7983
+        },
+        {
+          "key" : 14911,
+          "doc_count" : 5897
+        },
+        {
+          "key" : 14096,
+          "doc_count" : 5110
+        },
+        {
+          "key" : 12748,
+          "doc_count" : 4638
+        },
+        {
+          "key" : 14606,
+          "doc_count" : 2782
+        }
+      ]
+```
+5 moins gros acheteurs en inversant order
+```
+GET ecommerce_data/_search
+{
+  "size": 0, 
+  "aggs": {
+    "5_bottom_customers": {
+      "terms": {
+        "field": "CustomerID",
+        "size": 5,
+      "order":{
+        "_count": "asc"
+      }
+      }
+    }
+  }
+}
+
+RES :
+ "aggregations" : {
+    "5_bottom_customers" : {
+      "doc_count_error_upper_bound" : 0,
+      "sum_other_doc_count" : 406398,
+      "buckets" : [
+        {
+          "key" : 12346,
+          "doc_count" : 2
+        },
+        {
+          "key" : 12347,
+          "doc_count" : 182
+        },
+        {
+          "key" : 12348,
+          "doc_count" : 31
+        },
+        {
+          "key" : 12349,
+          "doc_count" : 73
+        },
+        {
+          "key" : 12350,
+          "doc_count" : 17
+        }
+      ]
+    }
+  }
+```
+
+### Aggs combinés
+Revenu journalier 
+On ajoute un sous aggrégat dans l'aggrégat daily_transactions.
+1. groupement par jour des transactions
+2. ajout aggs de sum, avec un *script* qui calcule le total par transaction
+```
+{
+  "size": 0,
+  "aggs": {
+    "daily_transactions": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "interval": "day"
+      },
+      "aggs": {
+        "daily_revenue": {
+          "sum": {
+            "script": {
+              "source": "doc['UnitPrice'].value * doc['Quantity'].value"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "daily_transactions" : {
+      "buckets" : [
+        {
+          "key_as_string" : "12/1/2010 0:0",
+          "key" : 1291161600000,
+          "doc_count" : 3096,
+          "daily_revenue" : {
+            "value" : 57458.3
+          }
+        },
+        {
+          "key_as_string" : "12/2/2010 0:0",
+          "key" : 1291248000000,
+          "doc_count" : 2107,
+          "daily_revenue" : {
+            "value" : 46207.28
+          }
+        },
+        ...
+      ]
+    }
+}
+```
+Calcul de plusieurs metrics par bucket : ex daily revenue & clients unique par jour
+```
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "daily_transactions": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "interval": "day"
+      },
+      "aggs": {
+        "daily_revenue": {
+          "sum": {
+            "script": {
+              "source": "doc['UnitPrice'].value * doc['Quantity'].value"
+            }
+          }
+        },
+        "unique_count":{
+          "cardinality": {
+            "field": "CustomerID"
+          }
+        }
+      }
+    }
+  }
+}
+
+
+RES :
+"aggregations" : {
+    "daily_transactions" : {
+      "buckets" : [
+        {
+          "key_as_string" : "12/1/2010 0:0",
+          "key" : 1291161600000,
+          "doc_count" : 3096,
+          "daily_revenue" : {
+            "value" : 57458.3
+          },
+          "unique_count" : {
+            "value" : 98
+          }
+        },
+        {
+          "key_as_string" : "12/2/2010 0:0",
+          "key" : 1291248000000,
+          "doc_count" : 2107,
+          "daily_revenue" : {
+            "value" : 46207.28
+          },
+          "unique_count" : {
+            "value" : 117
+          }
+        },
+        ...
+      ]
+    }
+}
+```
+Order par un sous aggrégat : max daily_revenu
+Ajout de order dans le premier aggrégat (création bucket)
+```
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "daily_transactions": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "interval": "day",
+        "order": {
+          "daily_revenue": "desc"
+        }
+      },
+      "aggs": {
+        "daily_revenue": {
+          "sum": {
+            "script": {
+              "source": "doc['UnitPrice'].value * doc['Quantity'].value"
+            }
+          }
+        },
+        "unique_count":{
+          "cardinality": {
+            "field": "CustomerID"
+          }
+        }
+      }
+    }
+  }
+}
+
+RES :
+"aggregations" : {
+    "daily_transactions" : {
+      "buckets" : [
+        {
+          "key_as_string" : "11/14/2011 0:0",
+          "key" : 1321228800000,
+          "doc_count" : 3580,
+          "daily_revenue" : {
+            "value" : 111160.52
+          },
+          "unique_count" : {
+            "value" : 109
+          }
+        },
+        {
+          "key_as_string" : "9/20/2011 0:0",
+          "key" : 1316476800000,
+          "doc_count" : 1716,
+          "daily_revenue" : {
+            "value" : 108194.0
+          },
+          "unique_count" : {
+            "value" : 56
+          }
+        },
+        ...
+      ]
+    }
+}
+```
