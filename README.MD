@@ -70,7 +70,7 @@ Ranking : classement des documents retournés par une recherche par leurs score
 
 Script d'insertion des documents du dataset des news categories du kaggle : https://www.kaggle.com/datasets/rmisra/news-category-dataset
 
-https://github.com/kmalki/elastic-crash-course/blob/1c77b40aee81b3b32fe70ea8aaa8fe2f1f82f07c/main.py#L1-L19
+https://github.com/kmalki/elastic-crash-course/blob/f09a7f57dd53acb6cd9f61b5e0267936ff9385d1/main_news_category_json_upload.py#L1-L19
 
 Requète de recherche :
 ```
@@ -545,7 +545,7 @@ Nouveau dataset de factures ecommerces : https://www.kaggle.com/datasets/carrie1
 Script ingestion des données du nouveau dataset :
 (A du être modifié plusieurs fois car lors de la lecture et l'envoi des données du csv il y a eu plusieurs erreurs : timeout, problème de vm et de process car j'avais essayé de le faire via une vm EC2, et finalement j'ai fini par terminé l'envoi des données depuis mon local, en changeant à chaque fois le début du tableau de données à récupérer du csv. J'ai également par la suite utilisé *parallel_bulk* pour paralleliser et augmenter la vitesse d'insertion. J'ai aussi modifié le chunk_size.)
 
-LINK
+https://github.com/kmalki/elastic-crash-course/blob/f09a7f57dd53acb6cd9f61b5e0267936ff9385d1/main_ecommerce_csv_upload.py#L1-L22
 
 Sample d'informations sur l'index
 ```
