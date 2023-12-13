@@ -1,6 +1,6 @@
 # Beginner's Crash Course to Elastic Stack
 
-Repo faisant lien aux workshops nommés Beginner's Crash Course to Elastic Stack mis en place par Elastic Community : https://www.youtube.com/watch?v=gS_nHTWZEJ8&list=PL_mJOmq4zsHZYAyK606y7wjQtC0aoE6Es&index=5
+Repo de prises de notes faisant lien à la série de workshops nommés Beginner's Crash Course to Elastic Stack mis en place par Elastic Community : https://www.youtube.com/watch?v=gS_nHTWZEJ8&list=PL_mJOmq4zsHZYAyK606y7wjQtC0aoE6Es&index=5 ainsi qu'aux répos associés à chaque session repertoriés dans ce repo général : https://github.com/LisaHJung/Beginners-Crash-Course-to-Elastic-Stack-Series-Table-of-Contents
 
 
 
@@ -16,6 +16,24 @@ Repo faisant lien aux workshops nommés Beginner's Crash Course to Elastic Stack
       - [Range aggs](#range-aggs)
       - [Terms aggs](#terms-aggs)
       - [Aggs combinés](#aggs-combinés)
+  - [Part 5: Mapping](#part-5-mapping)
+    - [Dynamic mapping](#dynamic-mapping)
+    - [Indexing strings](#indexing-strings)
+      - [Text fied type](#text-fied-type)
+        - [Text analysis](#text-analysis)
+        - [Index inversé](#index-inversé)
+    - [Keyword field type](#keyword-field-type)
+    - [Définir un mapping à partir de besoins](#définir-un-mapping-à-partir-de-besoins)
+      - [Feature 1 : search for produce name, country of origin and description](#feature-1--search-for-produce-name-country-of-origin-and-description)
+      - [Feature 2 : identify top countries of origin with the most frequent purchase history](#feature-2--identify-top-countries-of-origin-with-the-most-frequent-purchase-history)
+      - [Feature 3 : sort produce by produce type(Fruit or Vegetable)](#feature-3--sort-produce-by-produce-typefruit-or-vegetable)
+      - [Feature 4 : get the summary of monthly expense](#feature-4--get-the-summary-of-monthly-expense)
+      - [Clean up](#clean-up)
+    - [Créer le mapping](#créer-le-mapping)
+      - [Reglès pratiques lors de la création d'un mapping](#reglès-pratiques-lors-de-la-création-dun-mapping)
+      - [Création du mapping](#création-du-mapping)
+    - [Modifier un champ d'un mapping](#modifier-un-champ-dun-mapping)
+    - [Runtime fields](#runtime-fields)
 
 
 ## Part 1: Intro to Elasticsearch and Kibana
@@ -1412,5 +1430,376 @@ RES :
         ...
       ]
     }
+}
+```
+
+## Part 5: Mapping
+Mapping définit comment un document sera indexé en définissant les types de chaque champs.
+### Dynamic mapping
+Lorsqu'on indexe un document sans avoir créé de mapping, Elastic définit ou modifie le mapping en fonction du document. Il passe en revue chaque champs et infére son type et crée un mapping.
+```
+POST temp_index/_doc
+{
+  "name": "Pineapple",
+  "botanical_name": "Ananas comosus",
+  "produce_type": "Fruit",
+  "country_of_origin": "New Zealand",
+  "date_purchased": "2020-06-02T12:15:35",
+  "quantity": 200,
+  "unit_price": 3.11,
+  "description": "a large juicy tropical fruit consisting of aromatic edible yellow flesh surrounded by a tough segmented skin and topped with a tuft of stiff leaves.These pineapples are sourced from New Zealand.",
+  "vendor_details": {
+    "vendor": "Tropical Fruit Growers of New Zealand",
+    "main_contact": "Hugh Rose",
+    "vendor_location": "Whangarei, New Zealand",
+    "preferred_vendor": true
+  }
+}
+```
+Syntaxe afficher mapping
+```
+GET index/_mapping
+```
+```
+GET temp_index/_mapping
+
+RES :
+{
+  "temp_index" : {
+    "mappings" : {
+      "properties" : {
+        "botanical_name" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "country_of_origin" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "date_purchased" : {
+          "type" : "date"
+        },
+        "description" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "name" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "produce_type" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "quantity" : {
+          "type" : "long"
+        },
+        "unit_price" : {
+          "type" : "float"
+        },
+        "vendor_details" : {
+          "properties" : {
+            "main_contact" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "preferred_vendor" : {
+              "type" : "boolean"
+            },
+            "vendor" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "vendor_location" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+Le mapping de chaque champs est dans *properties* par ordre alphabétique. 
+Liste des types de champs : https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-types.html
+
+### Indexing strings
+2 types de string :
+- text : designé pour *full-text searches*, pas sensible à la casse
+- keyword : designé pour *exact searches*, *aggs*, *sort*
+  
+Par défaut chaque string est mappé 2 fois : text & keyword.
+
+#### Text fied type
+##### Text analysis
+A chaque fois qu'un champ text est indexé, le process de *text analysis* est opéré. Il tokenise le texte en le découpant par mot, sans les ponctuations, et lowercase.
+##### Index inversé
+Une fois le *text analysis* terminé, chaque mot va être stocké dans une liste triée par ordre alphabétique nommée *inverted index*. Chaque token **unique** va être stocké dans l'*inverted index* avec l'ID du document.
+Si le token existe déjà, seulement l'ID du document est ajouté à la liste d'IDs.
+Text field est optimal pour la *full-text search*. Lors d'une requète, Elastic va regarder dans l'*inverted index* les IDs de documents qui ont comme *token* le mot a recherché.
+
+### Keyword field type
+Keyword field est utilisé pour aggs, sort, et exact search. Stocké dans des *doc values*, une structué key value avec comme key l'id du doc et value le texte original non analysé, ce qui est optimal pour les actions de aggs, sort, exact search qui ont besoin de l'id du doc.
+
+Quand Elastic crée un mapping dynamique, il ne sait pas quel sera l'usage des strings, donc il map sur les deux types de string.
+
+Cela peut ne pas être optimal lorsqu'on n'a pas besoin de l'un ou de l'autre, car cela ralentira l'indexing et gaspillera du stockage.
+
+### Définir un mapping à partir de besoins
+Project: Build an app for a client who manages a produce warehouse
+
+This app must enable users to:
+- search for produce name, country of origin and description
+
+- identify top countries of origin with the most frequent purchase history
+
+- sort produce by produce type(Fruit or Vegetable)
+
+- get the summary of monthly expense
+
+Sample data 
+```
+{
+  "name": "Pineapple",
+  "botanical_name": "Ananas comosus",
+  "produce_type": "Fruit",
+  "country_of_origin": "New Zealand",
+  "date_purchased": "2020-06-02T12:15:35",
+  "quantity": 200,
+  "unit_price": 3.11,
+  "description": "a large juicy tropical fruit consisting of aromatic edible yellow flesh surrounded by a tough segmented skin and topped with a tuft of stiff leaves.These pineapples are sourced from New Zealand.",
+  "vendor_details": {
+    "vendor": "Tropical Fruit Growers of New Zealand",
+    "main_contact": "Hugh Rose",
+    "vendor_location": "Whangarei, New Zealand",
+    "preferred_vendor": true
+  }
+}
+```
+#### Feature 1 : search for produce name, country of origin and description
+- champs : name, country_of_origin, description
+- doivent être full-text search
+- Pas d'aggs, sort, exact search pour le nom et la description
+  - name & description : text
+- country_of_origin : à définir
+
+#### Feature 2 : identify top countries of origin with the most frequent purchase history
+- présence d'aggs
+- également full-text search : feature 1
+- country_of_origin : text & keyword
+
+#### Feature 3 : sort produce by produce type(Fruit or Vegetable)
+- présence de sorting par produce_type
+- pas de full-text search
+- produce_type : keyword
+
+#### Feature 4 : get the summary of monthly expense
+- date_purchased, quantity, unit_price
+- Date histogram aggs
+- Metric aggs : sum
+  - pas de champs total : calculer par quantity * unit_price (script)
+
+#### Clean up
+- champs botanical_name et vendor_details non utile 
+  - désactiver les champs pour économiser du stockage
+  - ces champs seront toujours présent dans "_source" (qui contient le document original au format JSON passé lors de l'indexing) 
+  - mais ne seront pas indexés : pas requétables ni stockés
+
+### Créer le mapping
+#### Reglès pratiques lors de la création d'un mapping
+1. Si on ne crée pas le mapping en amont, Elastic va créer un mapping dynamique
+2. On peut créer le mapping au moment de la création de l'index
+3. Il n'existe qu'un seul mapping par index. Si on souhaite le modifier, on peut **seulement ajouter** des champs, on **ne peut modifier le mapping d'un champ**.
+4. Si on veut modifier le mapping d'un champ, il faut créer un nouvel index avec le nouveau mapping, et réindexer les documents dans le nouvel index.
+   
+#### Création du mapping
+On peut commencer par ajouter un document type dans une index de test et recupérer le mapping pour le modifier selon nos choix de mapping pour ne pas commencer de 0.
+
+Mapping final & création de l'index à partir du mapping
+```
+PUT produces
+{
+  "mappings": {
+    "properties": {
+      "botanical_name": {
+        "enabled": false
+      },
+      "country_of_origin": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "date_purchased": {
+        "type": "date"
+      },
+      "description": {
+        "type": "text"
+      },
+      "name": {
+        "type": "text"
+      },
+      "produce_type": {
+        "type": "keyword"
+      },
+      "quantity": {
+        "type": "long"
+      },
+      "unit_price": {
+        "type": "float"
+      },
+      "vendor_details": {
+       "enabled": false
+      }
+    }
+  }
+}
+```
+Indexer un document
+```
+POST produces/_doc
+{
+  "name": "Pineapple",
+  "botanical_name": "Ananas comosus",
+  "produce_type": "Fruit",
+  "country_of_origin": "New Zealand",
+  "date_purchased": "2020-06-02T12:15:35",
+  "quantity": 200,
+  "unit_price": 3.11,
+  "description": "a large juicy tropical fruit consisting of aromatic edible yellow flesh surrounded by a tough segmented skin and topped with a tuft of stiff leaves.These pineapples are sourced from New Zealand.",
+  "vendor_details": {
+    "vendor": "Tropical Fruit Growers of New Zealand",
+    "main_contact": "Hugh Rose",
+    "vendor_location": "Whangarei, New Zealand",
+    "preferred_vendor": true
+  }
+}
+```
+Indexer un document avec un champ en plus
+```
+POST produces/_doc
+{
+  "name": "Mango",
+  "botanical_name": "Harum Manis",
+  "produce_type": "Fruit",
+  "country_of_origin": "Indonesia",
+  "organic": true,
+  "date_purchased": "2020-05-02T07:15:35",
+  "quantity": 500,
+  "unit_price": 1.5,
+  "description": "Mango Arumanis or Harum Manis is originated from East Java. Arumanis means harum dan manis or fragrant and sweet just like its taste. The ripe Mango Arumanis has dark green skin coated with thin grayish natural wax. The flesh is deep yellow, thick, and soft with little to no fiber. Mango Arumanis is best eaten when ripe.",
+  "vendor_details": {
+    "vendor": "Ayra Shezan Trading",
+    "main_contact": "Suharto",
+    "vendor_location": "Binjai, Indonesia",
+    "preferred_vendor": true
+  }
+}
+```
+-> Elastic a créé dynamiquement le champ *organic*
+### Modifier un champ d'un mapping
+On ne peut modifier le champ d'un mapping dans le même mapping. On doit :
+1. Créer un nouvel index avec le mapping à jour
+2. Réindexer les documents de *index* vers le nouvel index *index_v2*:
+```
+POST _reindex
+{
+  "source": {
+    "index": "index"
+  },
+  "des": {
+    "index": "index_v2"
+  }
+}
+```
+
+### Runtime fields
+Runtime est le moment où Elastic execute les requètes.
+Runtime field permet de spécifier à Elastic que lorsqu'on requète ce champ, il va le calculer à partir du script. Le champ n'est pas indexé donc gain de stockage, et pas besoin de réindexé les documents lorsqu'on ajoute un runtime field.
+Syntax
+```
+PUT Enter-name-of-index/_mapping
+{
+  "runtime": {
+    "Name-your-runtime-field-here": {
+      "type": "Specify-field-type-here",
+      "script": {
+        "source": "Specify the formula you want executed"
+      }
+    }
+  }
+}
+```
+Exemple pour le total de chaque transaction qui satisfait le champs manquant pour l'aggs de la feature 4
+```
+PUT produces/_mapping
+{
+  "runtime": {
+    "total": {
+      "type": "double",
+      "script": {
+        "source": "doc['unit_price'] * doc['quantity']"
+      }
+    }
+  }
+}
+```
+-> ma version d'Elastic ne supportait pas encore les *runtime fields*
+Comment on utilise le runtime field *total* dans un aggs
+```
+GET produce_v2/_search
+{
+  "size": 0,
+  "aggs": {
+    "total_value": {
+      "sum": {
+        "field": "total"
+      }
+    }
+  }
 }
 ```
